@@ -84,6 +84,7 @@ mono_crash.*
 *.unitypackage
 *.unitypackage.meta
 *.app
+first_build_metaquest3_BackUpThisFolder_ButDontShipItWithYourGame
 
 # Crashlytics generated file
 crashlytics-build.properties
@@ -119,3 +120,6 @@ InitTestScene*.unity*
 # IDE / Editor
 .vscode/
 .idea/
+
+# Debug-Information
+Semesterprojekt_VR_Aengste_BurstDebugInformation_DoNotShip
