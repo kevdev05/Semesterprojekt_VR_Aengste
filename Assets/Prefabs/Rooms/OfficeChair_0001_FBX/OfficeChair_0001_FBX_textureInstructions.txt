@@ -1,0 +1,11 @@
+TEXTURES
+Leather:
+The diffuse component is composed by a dark brown uniform color with hex value:281F1B, and the image file Leather_001_diffuse.png, to be mixed as one like.
+Leather_001_bump.png can be used as bump or displacement map.
+Leather_001_spec.png is used as specular map.
+Leather_LargeScaleNoise.png  is used as specular map too, but with a different scale obtained with a second UVMap (UVMap_noise). The two specular maps are mixed between them and with a reflection falloff node(Fresnel like).
+
+Wrinkled Plastic:
+The diffuse component consists of a black uniform color.
+plastic_wrinkled_bump.png is used as bump map.
+Fresnel reflections are applied.
