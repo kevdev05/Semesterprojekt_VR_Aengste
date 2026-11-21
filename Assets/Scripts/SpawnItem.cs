@@ -24,6 +24,7 @@ public class RandomObjectActivator : MonoBehaviour
     {
         activateAction.performed += OnActivatePerformed;
         activateAction.Enable();
+        Activate();
     }
 
     private void OnDisable()
