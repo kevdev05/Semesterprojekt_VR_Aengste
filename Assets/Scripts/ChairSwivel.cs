@@ -1,10 +1,9 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 /// <summary>
-/// Makes the seat of an office chair swivel gently left and right.
-/// Put this on the chair's root object (e.g. OfficeChair_Fixed).
-/// Press the test key (default: S) in Play mode to start/stop all chairs.
+/// Turns the seat of an office chair slowly by a few degrees, like a person shifting on the chair.
+/// The seat turns a little and stays there until the next move.
+/// Put this on the chair's root object. WHEN chairs move is decided by TherapistControl.
 /// </summary>
 public class ChairSwivel : MonoBehaviour
 {
@@ -14,24 +13,37 @@ public class ChairSwivel : MonoBehaviour
     [Tooltip("Local axis the seat turns around. Models from Blender usually need Z (0,0,1). If the seat tips over instead of turning, try Y (0,1,0).")]
     public Vector3 axis = Vector3.forward;
 
-    [Header("Swivel")]
-    [Tooltip("Start swiveling as soon as Play mode starts.")]
-    public bool swivelOnStart = true;
+    [Header("Movement")]
+    [Tooltip("How often this chair moves on its own, on average. 0 = never, 1 = about once per minute, 5 = about every 12 seconds. " +
+             "The time between two moves is random. Can be changed in Play mode.")]
+    [Range(0f, 5f)] public float movesPerMinute = 1f;
 
-    [Tooltip("How far the seat turns to each side, in degrees.")]
-    [Range(0f, 90f)] public float maxAngle = 15f;
+    [Tooltip("How far the seat may turn from its start position, in degrees (to one side, to the other side).")]
+    public Vector2 range = new Vector2(-4f, 4f);
 
-    [Tooltip("Full left-right swings per second.")]
-    [Range(0.05f, 3f)] public float speed = 0.4f;
+    [Tooltip("Smallest and largest turn of one move, in degrees.")]
+    public Vector2 turnSize = new Vector2(2f, 4f);
 
-    [Header("Test key")]
-    [Tooltip("Keyboard key that starts/stops the swivel.")]
-    public Key toggleKey = Key.S;
+    [Tooltip("Average speed in degrees per second. Every move starts and stops softly.")]
+    public float speed = 1f;
+
+    const float StopTime = 0.5f;     // seconds to come to a stop
+    const float ReturnSpeed = 3f;    // degrees per second on the way back to the start position
+    const float MinReturnTime = 1.2f;
 
     Quaternion startRotation;
-    float phase;       // random offset so chairs don't move in sync
-    bool swiveling;
-    float weight;      // 0..1, used to ease in and out smoothly
+    float angle;                     // current angle from the start position
+    float velocity;                  // degrees per second, for a soft stop
+    float from, to, progress = 1f, duration = 1f;
+    float stopLeft;                  // > 0: slowing down
+
+    /// <summary>Is the seat turning right now?</summary>
+    public bool IsMoving => progress < 1f || stopLeft > 0f;
+
+    /// <summary>Seconds the current move takes.</summary>
+    public float Duration => duration;
+
+    bool returning;
 
     void Awake()
     {
@@ -46,19 +58,72 @@ public class ChairSwivel : MonoBehaviour
         }
 
         startRotation = seat.localRotation;
-        phase = Random.Range(0f, Mathf.PI * 2f);
-        swiveling = swivelOnStart;
+    }
+
+    /// <summary>Random seconds from one move to the next (half to one and a half times the average).</summary>
+    public float RandomInterval() =>
+        movesPerMinute > 0f ? 60f / movesPerMinute * Random.Range(0.5f, 1.5f) : float.PositiveInfinity;
+
+    /// <summary>Turn a little to a random side and stay there.</summary>
+    public void StartMove()
+    {
+        float size = Random.Range(turnSize.x, turnSize.y);
+        float side = Random.value < 0.5f ? -1f : 1f;
+        float target = Mathf.Clamp(angle + side * size, range.x, range.y);
+        if (Mathf.Abs(target - angle) < turnSize.x)         // no room on this side: the other one
+            target = Mathf.Clamp(angle - side * size, range.x, range.y);
+        MoveTo(target, Mathf.Abs(target - angle) / Mathf.Max(speed, 0.1f));
+        returning = false;
+    }
+
+    /// <summary>Slow down and stay where the seat is.</summary>
+    public void Stop()
+    {
+        if (progress >= 1f) return;
+        progress = 1f;
+        stopLeft = StopTime;
+        returning = false;
+    }
+
+    /// <summary>Turn back to the start position (e.g. for typing, so the hands reach the laptop).</summary>
+    public void ReturnToStart()
+    {
+        if (returning || (!IsMoving && Mathf.Abs(angle) < 0.01f)) return;
+        MoveTo(0f, Mathf.Max(MinReturnTime, Mathf.Abs(angle) / ReturnSpeed));
+        returning = true;
+    }
+
+    void MoveTo(float target, float seconds)
+    {
+        from = angle;
+        to = target;
+        duration = Mathf.Max(seconds, 0.01f);
+        progress = 0f;
+        stopLeft = 0f;
     }
 
     void Update()
     {
-        if (Keyboard.current != null && Keyboard.current[toggleKey].wasPressedThisFrame)
-            swiveling = !swiveling;
+        float dt = Time.deltaTime;
+        if (dt <= 0f) return;
 
-        // Ease in/out over about one second instead of snapping.
-        weight = Mathf.MoveTowards(weight, swiveling ? 1f : 0f, Time.deltaTime);
+        if (progress < 1f)
+        {
+            progress = Mathf.MoveTowards(progress, 1f, dt / duration);
+            float p = progress;
+            float soft = p * p * p * (p * (6f * p - 15f) + 10f);
+            float next = Mathf.Lerp(from, to, soft);
+            velocity = (next - angle) / dt;
+            angle = next;
+            if (progress >= 1f) returning = false;
+        }
+        else if (stopLeft > 0f)
+        {
+            angle = Mathf.Clamp(angle + velocity * (stopLeft / StopTime) * dt, range.x, range.y);
+            stopLeft -= dt;
+        }
+        else return;
 
-        float angle = Mathf.Sin(Time.time * speed * Mathf.PI * 2f + phase) * maxAngle * weight;
         seat.localRotation = startRotation * Quaternion.AngleAxis(angle, axis);
     }
 
